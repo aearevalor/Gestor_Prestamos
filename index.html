@@ -1,0 +1,972 @@
+
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Gestor de Préstamos de Activos</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script type="importmap">
+{
+  "imports": {
+    "react": "https://esm.sh/react@^19.1.0",
+    "react-dom/": "https://esm.sh/react-dom@^19.1.0/",
+    "react/": "https://esm.sh/react@^19.1.0/"
+  }
+}
+</script>
+<link rel="stylesheet" href="/index.css">
+</head>
+<body class="bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100">
+    <div id="root"></div>
+    <script type="text/babel">
+      const {
+        useState,
+        useEffect,
+        useRef,
+        useCallback,
+        useMemo,
+        forwardRef,
+        useImperativeHandle,
+        StrictMode,
+      } = React;
+
+      // From types.ts
+      const LoanStatus = {
+        LOANED: 'En Préstamo',
+        RETURNED: 'Devuelto',
+      };
+
+      // From components/icons.tsx
+      const UploadIcon = ({ className }) => (
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={className || "w-6 h-6"}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M12 16.5V9.75m0 0l-3.75 3.75M12 9.75l3.75 3.75M17.25 12a5.25 5.25 0 00-1.066-3.163l-1.396-.931-1.121-.747a.75.75 0 00-.868 0L9.022 8.134a5.25 5.25 0 00-1.066 3.163v1.875a5.25 5.25 0 001.066 3.163l1.396.931 1.121.747a.75.75 0 00.868 0l1.396-.931 1.121-.747a5.25 5.25 0 001.066-3.163V12z" />
+        </svg>
+      );
+
+      const SignatureIcon = ({ className }) => (
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={className || "w-6 h-6"}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10" />
+        </svg>
+      );
+
+      const ClearIcon = ({ className }) => (
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={className || "w-6 h-6"}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 9.75L14.25 12m0 0l2.25 2.25M14.25 12L12 14.25m-2.25-2.25L12 9.75m-2.25 2.25L7.5 12m9 7.5l-3.375-3.375M16.5 4.5L12 9l-4.5-4.5M12 9l4.5 4.5M12 9L7.5 13.5" />
+          </svg>
+      );
+
+      const LoanIcon = ({ className }) => (
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={className || "w-6 h-6"}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 8.25H7.5a2.25 2.25 0 00-2.25 2.25v9a2.25 2.25 0 002.25 2.25h9a2.25 2.25 0 002.25-2.25v-9a2.25 2.25 0 00-2.25-2.25H15M9 12l3 3m0 0l3-3m-3 3V2.25" />
+          </svg>
+      );
+
+      const ReturnIcon = ({ className }) => (
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={className || "w-6 h-6"}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 15L3 9m0 0l6-6M3 9h12a6 6 0 010 12h-3" />
+          </svg>
+      );
+
+      const TrashIcon = ({ className }) => (
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={className || "w-6 h-6"}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
+          </svg>
+      );
+
+      // From services/itemService.ts
+      const processRawItems = (rawData) => {
+        return rawData.map((row) => {
+          const isNumeric = /^\d+$/.test(row.placa);
+          return {
+            uniqueKey: isNumeric ? row.placa : crypto.randomUUID(),
+            placa: row.placa,
+            description: row.descripcion,
+            crea: row.crea,
+            isConsumable: !isNumeric,
+            initialQuantity: row.cantidad,
+          };
+        });
+      };
+
+      // From components/SignaturePad.tsx
+      const SignaturePad = forwardRef(({ onSave, label, disabled = false }, ref) => {
+        const canvasRef = useRef(null);
+        const [isDrawing, setIsDrawing] = useState(false);
+        const [hasSigned, setHasSigned] = useState(false);
+
+        const getCtx = useCallback(() => canvasRef.current?.getContext('2d'), []);
+
+        const getCoords = useCallback((e) => {
+          if (!canvasRef.current) return null;
+          const rect = canvasRef.current.getBoundingClientRect();
+          const clientX = e.nativeEvent.touches ? e.nativeEvent.touches[0].clientX : e.nativeEvent.clientX;
+          const clientY = e.nativeEvent.touches ? e.nativeEvent.touches[0].clientY : e.nativeEvent.clientY;
+          return {
+            x: clientX - rect.left,
+            y: clientY - rect.top,
+          };
+        }, []);
+
+        const startDrawing = useCallback((e) => {
+          if (disabled) return;
+          const coords = getCoords(e);
+          if (!coords) return;
+          const ctx = getCtx();
+          if (!ctx) return;
+          
+          ctx.beginPath();
+          ctx.moveTo(coords.x, coords.y);
+          setIsDrawing(true);
+          setHasSigned(true);
+        }, [disabled, getCoords, getCtx]);
+
+        const draw = useCallback((e) => {
+          if (!isDrawing || disabled) return;
+          e.preventDefault();
+          const coords = getCoords(e);
+          if (!coords) return;
+          const ctx = getCtx();
+          if (!ctx) return;
+          
+          ctx.lineTo(coords.x, coords.y);
+          ctx.stroke();
+        }, [isDrawing, disabled, getCoords, getCtx]);
+
+        const stopDrawing = useCallback(() => {
+          if (disabled) return;
+          const ctx = getCtx();
+          if (ctx) ctx.closePath();
+          setIsDrawing(false);
+          if (canvasRef.current && hasSigned) {
+              onSave(canvasRef.current.toDataURL());
+          }
+        }, [disabled, onSave, getCtx, hasSigned]);
+
+        const clearCanvas = useCallback(() => {
+          const canvas = canvasRef.current;
+          if (!canvas) return;
+          const ctx = getCtx();
+          if (!ctx) return;
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+          setHasSigned(false);
+          onSave("");
+        }, [onSave, getCtx]);
+
+        useImperativeHandle(ref, () => ({
+          clear: clearCanvas,
+        }));
+
+        useEffect(() => {
+          const canvas = canvasRef.current;
+          if (!canvas) return;
+          
+          const ctx = canvas.getContext('2d');
+          if (!ctx) return;
+
+          const setCanvasStyle = () => {
+            ctx.strokeStyle = document.documentElement.classList.contains('dark') ? '#D1D5DB' : '#374151';
+            ctx.lineWidth = 2;
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+          };
+
+          const observer = new ResizeObserver(() => {
+              const { width, height } = canvas.getBoundingClientRect();
+              if (canvas.width !== width || canvas.height !== height) {
+                  const tempCanvas = document.createElement('canvas');
+                  const tempCtx = tempCanvas.getContext('2d');
+                  if (tempCtx && canvas.width > 0 && canvas.height > 0) {
+                      tempCanvas.width = canvas.width;
+                      tempCanvas.height = canvas.height;
+                      tempCtx.drawImage(canvas, 0, 0);
+                  }
+
+                  canvas.width = width;
+                  canvas.height = height;
+                  setCanvasStyle();
+
+                  if (tempCtx) {
+                      ctx.drawImage(tempCanvas, 0, 0);
+                  }
+              }
+          });
+          observer.observe(canvas);
+
+          const themeObserver = new MutationObserver(() => {
+              setCanvasStyle();
+              // Redraw content if it exists
+              if (hasSigned) {
+                  const dataUrl = canvas.toDataURL();
+                  const img = new Image();
+                  img.onload = () => ctx.drawImage(img, 0, 0);
+                  img.src = dataUrl;
+              }
+          });
+          themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+
+          setCanvasStyle();
+
+          return () => {
+              observer.disconnect();
+              themeObserver.disconnect();
+          };
+        }, [hasSigned]);
+        
+        return (
+          <div className="w-full">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{label}</label>
+            <div className={`relative w-full aspect-[2/1] bg-gray-50 dark:bg-gray-700 rounded-lg border-2 ${disabled ? 'border-dashed border-gray-300 dark:border-gray-600' : 'border-dashed border-gray-400 dark:border-gray-500'} ${disabled ? 'cursor-not-allowed' : ''}`}>
+              <canvas
+                ref={canvasRef}
+                className={`w-full h-full rounded-lg touch-none ${disabled ? 'opacity-50' : ''}`}
+                onMouseDown={startDrawing}
+                onMouseMove={draw}
+                onMouseUp={stopDrawing}
+                onMouseLeave={stopDrawing}
+                onTouchStart={startDrawing}
+                onTouchMove={draw}
+                onTouchEnd={stopDrawing}
+              />
+              {!hasSigned && !disabled && (
+                <div className="absolute inset-0 flex flex-col items-center justify-center text-gray-400 dark:text-gray-500 pointer-events-none">
+                  <SignatureIcon className="w-8 h-8 mb-2" />
+                  <span className="text-sm">Firme aquí</span>
+                </div>
+              )}
+              {hasSigned && !disabled && (
+                  <button
+                      type="button"
+                      onClick={clearCanvas}
+                      className="absolute top-2 right-2 p-1.5 rounded-full bg-gray-200 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-red-100 dark:hover:bg-red-900/50 hover:text-red-600 dark:hover:text-red-400 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors"
+                      aria-label="Limpiar firma"
+                  >
+                      <ClearIcon className="w-4 h-4" />
+                  </button>
+              )}
+            </div>
+          </div>
+        );
+      });
+
+      // From components/LoanForm.tsx
+      const LoanForm = ({ items, onBatchLoan, availableQuantities, requesters }) => {
+        const [loanCart, setLoanCart] = useState([]);
+        const [searchTerm, setSearchTerm] = useState('');
+        const [requesterName, setRequesterName] = useState('');
+        const [receiverSignature, setReceiverSignature] = useState(null);
+        const [formError, setFormError] = useState(null);
+        const signaturePadRef = useRef(null);
+
+        const searchResults = useMemo(() => {
+          if (!searchTerm.trim()) return [];
+          const lowerCaseSearchTerm = searchTerm.toLowerCase();
+          return items
+            .filter(item => {
+              const availableQty = availableQuantities[item.uniqueKey] ?? 0;
+              const inCart = loanCart.some(cartItem => cartItem.item.uniqueKey === item.uniqueKey);
+              
+              const isAvailable = item.isConsumable ? availableQty > 0 : (availableQty > 0 && !inCart);
+
+              return (
+                isAvailable &&
+                (item.placa.toLowerCase().includes(lowerCaseSearchTerm) ||
+                item.description.toLowerCase().includes(lowerCaseSearchTerm))
+              );
+            })
+            .slice(0, 5);
+        }, [searchTerm, items, availableQuantities, loanCart]);
+
+        const handleAddItem = (item) => {
+          setLoanCart(prev => [...prev, { item, quantity: 1 }]);
+          setSearchTerm('');
+        };
+
+        const handleRemoveItem = (uniqueKey) => {
+          setLoanCart(prev => prev.filter(cartItem => cartItem.item.uniqueKey !== uniqueKey));
+        };
+
+        const handleQuantityChange = (uniqueKey, newQuantityStr) => {
+          const itemInCart = loanCart.find(ci => ci.item.uniqueKey === uniqueKey);
+          if (!itemInCart || !itemInCart.item.isConsumable) return;
+
+          if (newQuantityStr === '') {
+            setLoanCart(prev => prev.map(cartItem => (cartItem.item.uniqueKey === uniqueKey ? { ...cartItem, quantity: '' } : cartItem)));
+            return;
+          }
+          
+          const newQuantity = parseInt(newQuantityStr, 10);
+          const maxAvailable = availableQuantities[itemInCart.item.uniqueKey] ?? 0;
+
+          if (isNaN(newQuantity)) return;
+
+          const clampedQuantity = Math.max(1, Math.min(newQuantity, maxAvailable));
+
+          setLoanCart(prev => prev.map(cartItem =>
+            cartItem.item.uniqueKey === uniqueKey ? { ...cartItem, quantity: clampedQuantity } : cartItem
+          ));
+        };
+        
+        const resetForm = useCallback(() => {
+          setLoanCart([]);
+          setSearchTerm('');
+          setRequesterName('');
+          setReceiverSignature(null);
+          setFormError(null);
+          signaturePadRef.current?.clear();
+        }, []);
+
+        const handleLoan = () => {
+          if (loanCart.length === 0) {
+            setFormError('Agregue al menos un elemento a la lista de préstamo.');
+            return;
+          }
+          if (loanCart.some(i => i.quantity === '' || i.quantity <= 0)) {
+            setFormError('Todas las cantidades deben ser números positivos.');
+            return;
+          }
+          if (!requesterName.trim()) {
+            setFormError('El nombre de quien solicita es obligatorio.');
+            return;
+          }
+          if (!receiverSignature) {
+            setFormError('La firma de quien recibe es obligatoria.');
+            return;
+          }
+          setFormError(null);
+
+          const loansToCreate = loanCart.map(cartItem => ({
+            item: cartItem.item,
+            loanedQuantity: Number(cartItem.quantity),
+            returnTimestamp: null,
+            returnerSignature: null,
+            status: LoanStatus.LOANED,
+          }));
+
+          onBatchLoan(loansToCreate, receiverSignature, requesterName);
+          resetForm();
+        };
+
+        return (
+          <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-lg h-full flex flex-col">
+            <h2 className="text-2xl font-bold text-gray-800 dark:text-white mb-4">Registrar Nuevo Préstamo</h2>
+            
+            <div className="flex-grow space-y-4 flex flex-col">
+              <div className="relative">
+                <label htmlFor="search-item" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Buscar Elemento</label>
+                <input
+                  type="text"
+                  id="search-item"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  placeholder="Buscar por placa o descripción..."
+                  className="mt-1 block w-full bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                  autoComplete="off"
+                />
+                {searchResults.length > 0 && (
+                  <ul className="absolute z-10 w-full mt-1 bg-white dark:bg-gray-700 shadow-lg rounded-md border border-gray-200 dark:border-gray-600 max-h-60 overflow-auto">
+                    {searchResults.map(item => (
+                      <li key={item.uniqueKey}>
+                        <button onClick={() => handleAddItem(item)} className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-indigo-50 dark:hover:bg-indigo-900/50">
+                          <span className="font-semibold">{item.description}</span>
+                          <span className="text-xs text-gray-500 dark:text-gray-400 block">Placa: {item.placa} | Disp: {availableQuantities[item.uniqueKey]}</span>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+              
+              <div className="space-y-3 pr-2 -mr-2 flex-grow overflow-y-auto">
+                {loanCart.length === 0 ? (
+                  <p className="text-center text-sm text-gray-500 dark:text-gray-400 py-4">La lista de préstamos está vacía.</p>
+                ) : (
+                  loanCart.map(({ item, quantity }) => (
+                    <div key={item.uniqueKey} className="flex items-center gap-3 bg-gray-50 dark:bg-gray-700/50 p-3 rounded-lg">
+                      <div className="flex-grow">
+                        <p className="font-semibold text-gray-800 dark:text-gray-100">{item.description}</p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400">Placa: {item.placa}</p>
+                      </div>
+                      <input
+                        type="number"
+                        value={quantity}
+                        onChange={(e) => handleQuantityChange(item.uniqueKey, e.target.value)}
+                        readOnly={!item.isConsumable}
+                        min="1"
+                        max={item.isConsumable ? (availableQuantities[item.uniqueKey] ?? 1) : 1}
+                        className={`w-20 text-center bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm py-1 px-2 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm ${!item.isConsumable ? 'cursor-not-allowed opacity-70' : ''}`}
+                        aria-label={`Cantidad para ${item.description}`}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveItem(item.uniqueKey)}
+                        className="p-2 rounded-full text-gray-500 dark:text-gray-400 hover:bg-red-100 dark:hover:bg-red-900/50 hover:text-red-600 dark:hover:text-red-400 transition-colors"
+                        aria-label={`Quitar ${item.description}`}
+                      >
+                        <TrashIcon className="w-5 h-5" />
+                      </button>
+                    </div>
+                  ))
+                )}
+              </div>
+              
+              <div className="mt-auto pt-4 space-y-4">
+                  <div>
+                      <label htmlFor="requester-name" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Nombre de quien solicita</label>
+                      <input
+                          type="text"
+                          id="requester-name"
+                          list="requesters-list"
+                          value={requesterName}
+                          onChange={(e) => setRequesterName(e.target.value)}
+                          placeholder="Ingrese el nombre completo"
+                          className="mt-1 block w-full bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                          required
+                      />
+                      <datalist id="requesters-list">
+                          {requesters.map(name => <option key={name} value={name} />)}
+                      </datalist>
+                  </div>
+                  <SignaturePad ref={signaturePadRef} label="Firma de quien recibe" onSave={setReceiverSignature} />
+                  {formError && <p className="text-sm text-red-600 dark:text-red-400 mt-2">{formError}</p>}
+              </div>
+            </div>
+
+            <div className="mt-6 flex-shrink-0">
+              <button
+                onClick={handleLoan}
+                disabled={loanCart.length === 0 || !receiverSignature || !requesterName.trim()}
+                className="w-full flex justify-center items-center gap-2 py-3 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:bg-indigo-300 dark:disabled:bg-indigo-800 disabled:cursor-not-allowed transition-colors"
+              >
+                <LoanIcon className="w-5 h-5" />
+                Realizar Préstamo
+              </button>
+            </div>
+          </div>
+        );
+      };
+
+      // From components/LoanHistory.tsx
+      const LoanHistory = ({ loans, onBatchReturn }) => {
+        const [selectedLoanIds, setSelectedLoanIds] = useState([]);
+        const [isReturnModalOpen, setIsReturnModalOpen] = useState(false);
+        const [returnerSignature, setReturnerSignature] = useState(null);
+        const signaturePadRef = useRef(null);
+        const modalRef = useRef(null);
+
+        const handleToggleSelection = (loanId) => {
+          setSelectedLoanIds(prev =>
+            prev.includes(loanId)
+              ? prev.filter(id => id !== loanId)
+              : [...prev, loanId]
+          );
+        };
+
+        useEffect(() => {
+          const dialog = modalRef.current;
+          if (dialog) {
+              if (isReturnModalOpen) {
+                  dialog.showModal();
+              } else {
+                  dialog.close();
+              }
+          }
+        }, [isReturnModalOpen]);
+
+        const openReturnModal = () => {
+          if (selectedLoanIds.length > 0) {
+            setIsReturnModalOpen(true);
+          }
+        };
+
+        const closeReturnModal = () => {
+          setIsReturnModalOpen(false);
+          setReturnerSignature(null);
+          signaturePadRef.current?.clear();
+        };
+
+        const confirmReturn = () => {
+          if (selectedLoanIds.length > 0 && returnerSignature) {
+            onBatchReturn(selectedLoanIds, returnerSignature);
+            setSelectedLoanIds([]);
+            closeReturnModal();
+          }
+        };
+
+        const formatDate = (date) => {
+          if (!date) return 'N/A';
+          return date.toLocaleString('es-ES', {
+            year: 'numeric', month: 'short', day: 'numeric',
+            hour: '2-digit', minute: '2-digit'
+          });
+        };
+
+        const { loansOnLoan, returnedLoans, onLoanGroups, returnedGroups } = useMemo(() => {
+          const onLoanItems = [];
+          const returnedItems = [];
+          const onLoanGrouped = {};
+          const returnedGrouped = {};
+          
+          const sortedLoans = [...loans].sort((a, b) => b.loanTimestamp.getTime() - a.loanTimestamp.getTime());
+          
+          sortedLoans.forEach(loan => {
+              const groupKey = loan.requesterName || 'Sin Asignar';
+              if (loan.status === LoanStatus.LOANED) {
+                  onLoanItems.push(loan);
+                  if (!onLoanGrouped[groupKey]) onLoanGrouped[groupKey] = [];
+                  onLoanGrouped[groupKey].push(loan);
+              } else {
+                  returnedItems.push(loan);
+                  if (!returnedGrouped[groupKey]) returnedGrouped[groupKey] = [];
+                  returnedGrouped[groupKey].push(loan);
+              }
+          });
+          
+          return { 
+              loansOnLoan: onLoanItems, 
+              returnedLoans: returnedItems, 
+              onLoanGroups: onLoanGrouped, 
+              returnedGroups: returnedGrouped 
+          };
+        }, [loans]);
+
+        const LoanListItem = ({ loan, selectable }) => (
+          <div className="flex gap-4">
+              {selectable && (
+                  <div className="flex-shrink-0 pt-1">
+                      <input
+                          type="checkbox"
+                          checked={selectedLoanIds.includes(loan.id)}
+                          onChange={() => handleToggleSelection(loan.id)}
+                          className="h-5 w-5 rounded border-gray-300 dark:border-gray-600 text-indigo-600 focus:ring-indigo-500 dark:bg-gray-900 dark:checked:bg-indigo-600"
+                          aria-labelledby={`loan-desc-${loan.id}`}
+                      />
+                  </div>
+              )}
+              <div className="flex-grow">
+                  <span id={`loan-desc-${loan.id}`} className="sr-only">Seleccionar {loan.item.description}</span>
+                  <div className="flex justify-between items-start">
+                      <div>
+                          <p className="font-bold text-lg text-indigo-600 dark:text-indigo-400">{loan.item.description}</p>
+                          <p className="text-sm text-gray-600 dark:text-gray-300">Placa: {loan.item.placa} | Cant: {loan.loanedQuantity}</p>
+                          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Préstamo: {formatDate(loan.loanTimestamp)}</p>
+                          {loan.returnTimestamp && (
+                              <p className="text-xs text-gray-500 dark:text-gray-400">Devolución: {formatDate(loan.returnTimestamp)}</p>
+                          )}
+                      </div>
+                      <div className="flex flex-col items-end gap-2">
+                              <span className={`px-2 py-1 text-xs font-semibold rounded-full ${loan.status === LoanStatus.LOANED ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/50 dark:text-yellow-300' : 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300'}`}>
+                                  {loan.status}
+                              </span>
+                      </div>
+                  </div>
+                  <div className="mt-3 flex gap-4 items-end">
+                      <div>
+                          <p className="text-xs font-medium text-gray-700 dark:text-gray-300">Firma Recibe:</p>
+                          <img src={loan.receiverSignature} alt="Firma de quien recibe" className="h-10 w-24 bg-white dark:bg-gray-200 rounded border border-gray-300 dark:border-gray-600 mt-1" />
+                      </div>
+                      {loan.returnerSignature && (
+                          <div>
+                              <p className="text-xs font-medium text-gray-700 dark:text-gray-300">Firma Entrega:</p>
+                              <img src={loan.returnerSignature} alt="Firma de quien entrega" className="h-10 w-24 bg-white dark:bg-gray-200 rounded border border-gray-300 dark:border-gray-600 mt-1" />
+                          </div>
+                      )}
+                  </div>
+              </div>
+            </div>
+        );
+
+        const LoanGroup = ({ title, loans, selectable }) => (
+          <div>
+              <h4 className="text-md font-semibold text-gray-600 dark:text-gray-400 mb-2">{title}</h4>
+              <ul className="space-y-4 border-l-2 border-indigo-200 dark:border-indigo-800 pl-4 ml-1">
+                  {loans.map(loan => (
+                      <li key={loan.id} className="bg-gray-50 dark:bg-gray-800/50 p-4 rounded-lg border border-gray-200 dark:border-gray-700">
+                          <LoanListItem loan={loan} selectable={selectable} />
+                      </li>
+                  ))}
+              </ul>
+          </div>
+        )
+
+        return (
+          <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-lg h-full flex flex-col">
+            <h2 className="text-2xl font-bold text-gray-800 dark:text-white mb-4">Historial de Préstamos</h2>
+            
+            {loansOnLoan.length > 0 && (
+              <div className="mb-4 flex-shrink-0">
+                  <button
+                  onClick={openReturnModal}
+                  disabled={selectedLoanIds.length === 0}
+                  className="w-full sm:w-auto inline-flex justify-center items-center gap-2 py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:bg-blue-300 dark:disabled:bg-blue-800 disabled:cursor-not-allowed transition-colors"
+                  >
+                  <ReturnIcon className="w-4 h-4" />
+                  Registrar Devolución de Seleccionados ({selectedLoanIds.length})
+                  </button>
+              </div>
+            )}
+
+            <div className="overflow-y-auto flex-grow pr-2 -mr-2 space-y-6">
+              <section>
+                <h3 className="text-lg font-semibold text-gray-700 dark:text-gray-200 mb-3 border-b border-gray-200 dark:border-gray-700 pb-2">En Préstamo ({loansOnLoan.length})</h3>
+                {Object.keys(onLoanGroups).length === 0 ? (
+                  <p className="text-center text-sm text-gray-500 dark:text-gray-400 py-4">No hay elementos en préstamo.</p>
+                ) : (
+                  <div className="space-y-6">
+                    {Object.entries(onLoanGroups).map(([requester, loanGroup]) => (
+                      <LoanGroup key={requester} title={requester} loans={loanGroup} selectable={true} />
+                    ))}
+                  </div>
+                )}
+              </section>
+
+              <section>
+                <h3 className="text-lg font-semibold text-gray-700 dark:text-gray-200 mb-3 border-b border-gray-200 dark:border-gray-700 pb-2">Devueltos ({returnedLoans.length})</h3>
+                {Object.keys(returnedGroups).length === 0 ? (
+                  <p className="text-center text-sm text-gray-500 dark:text-gray-400 py-4">No hay devoluciones registradas.</p>
+                ) : (
+                  <div className="space-y-6 opacity-80">
+                      {Object.entries(returnedGroups).map(([requester, loanGroup]) => (
+                          <LoanGroup key={requester} title={requester} loans={loanGroup} selectable={false} />
+                      ))}
+                  </div>
+                )}
+              </section>
+            </div>
+
+              <dialog ref={modalRef} onClose={closeReturnModal} className="p-0 rounded-lg shadow-xl bg-white dark:bg-gray-800 backdrop:bg-black/50 w-11/12 max-w-lg">
+                  <div className="p-6">
+                      <h3 className="text-xl font-bold mb-4">Registrar Devolución</h3>
+                      <p className="mb-4 text-sm text-gray-600 dark:text-gray-300">
+                          Firmando a continuación, confirma la devolución de {selectedLoanIds.length} elemento(s).
+                      </p>
+                      <SignaturePad ref={signaturePadRef} label="Firma de quien entrega" onSave={setReturnerSignature} />
+                      <div className="flex gap-2 mt-6">
+                          <button
+                              onClick={confirmReturn}
+                              disabled={!returnerSignature}
+                              className="flex-1 py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:bg-green-300 dark:disabled:bg-green-800 disabled:cursor-not-allowed"
+                          >
+                              Confirmar Devolución
+                          </button>
+                          <button
+                              type="button"
+                              onClick={closeReturnModal}
+                              className="flex-1 py-2 px-4 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                          >
+                              Cancelar
+                          </button>
+                      </div>
+                  </div>
+              </dialog>
+          </div>
+        );
+      };
+
+      // From components/InventoryLoader.tsx
+      const InventoryLoader = ({ onLoad }) => {
+        const [error, setError] = useState(null);
+        const [isLoading, setIsLoading] = useState(false);
+
+        const handleFileChange = (event) => {
+          const file = event.target.files?.[0];
+          if (file) {
+            parseFile(file);
+          }
+          event.target.value = '';
+        };
+
+        const parseFile = (file) => {
+          setIsLoading(true);
+          setError(null);
+          const reader = new FileReader();
+
+          const robustCsvParser = (line, delimiter) => {
+            const fields = [];
+            let currentField = '';
+            let inQuotedField = false;
+
+            for (let i = 0; i < line.length; i++) {
+              const char = line[i];
+              if (char === '"') {
+                if (inQuotedField && line[i + 1] === '"') {
+                  currentField += '"';
+                  i++;
+                } else {
+                  inQuotedField = !inQuotedField;
+                }
+              } else if (char === delimiter && !inQuotedField) {
+                fields.push(currentField);
+                currentField = '';
+              } else {
+                currentField += char;
+              }
+            }
+            fields.push(currentField);
+            return fields.map(field => field.trim().replace(/^"|"$/g, '').trim());
+          };
+
+          reader.onload = (e) => {
+            const text = e.target?.result;
+            try {
+              if (!text) {
+                throw new Error("El archivo está vacío o no se pudo leer.");
+              }
+
+              const lines = text.split(/\r?\n/).filter(line => line.trim() !== '');
+              if (lines.length < 2) {
+                throw new Error("El archivo CSV está vacío o solo contiene la cabecera.");
+              }
+              
+              let headerLine = lines[0];
+              if (headerLine.charCodeAt(0) === 0xFEFF) {
+                headerLine = headerLine.slice(1);
+              }
+
+              const commas = (headerLine.match(/,/g) || []).length;
+              const semicolons = (headerLine.match(/;/g) || []).length;
+              const delimiter = semicolons > commas ? ';' : ',';
+              
+              const headers = robustCsvParser(headerLine, delimiter).map(h => h.toLowerCase());
+              const requiredHeaders = ['placa', 'descripcion', 'crea', 'cantidad'];
+              
+              const missingHeaders = requiredHeaders.filter(rh => !headers.includes(rh));
+              if (missingHeaders.length > 0) {
+                throw new Error(`Faltan columnas requeridas: ${missingHeaders.join(', ')}. Verifique las cabeceras y el delimitador. Cabeceras detectadas: ${headers.join(', ')}`);
+              }
+              
+              const placaIndex = headers.indexOf('placa');
+              const descIndex = headers.indexOf('descripcion');
+              const creaIndex = headers.indexOf('crea');
+              const cantIndex = headers.indexOf('cantidad');
+
+              const rawData = lines.slice(1).map((line, i) => {
+                const values = robustCsvParser(line, delimiter);
+
+                if (values.length < headers.length) {
+                  console.warn(`La fila ${i + 2} tiene un número de columnas incorrecto (${values.length} en lugar de ${headers.length}). Se omitirá.`);
+                  return null;
+                }
+                
+                const placa = values[placaIndex] || '';
+                if (!placa) {
+                  return null;
+                }
+
+                const cantidadStr = values[cantIndex] || '';
+                const cantidad = parseInt(cantidadStr, 10);
+                if (isNaN(cantidad)) {
+                  console.warn(`Cantidad inválida ('${cantidadStr}') en la fila ${i + 2} para la placa ${placa}. Se omitirá la fila.`);
+                  return null;
+                }
+
+                return {
+                  placa,
+                  descripcion: values[descIndex] || '',
+                  crea: values[creaIndex] || '',
+                  cantidad,
+                };
+              }).filter(item => item !== null);
+              
+              if (rawData.length === 0) {
+                throw new Error("No se encontraron datos válidos en el archivo. Verifique el formato, que no esté vacío y que las filas tengan datos correctos.");
+              }
+
+              const processedItems = processRawItems(rawData); 
+              onLoad(processedItems);
+            } catch (err) {
+              setError(err instanceof Error ? err.message : "Ocurrió un error al procesar el archivo.");
+              setIsLoading(false);
+            }
+          };
+          reader.onerror = () => {
+            setError("No se pudo leer el archivo.");
+            setIsLoading(false);
+          };
+          reader.readAsText(file, 'UTF-8');
+        };
+
+        return (
+          <div className="max-w-lg mx-auto bg-white dark:bg-gray-800 rounded-xl shadow-lg p-8 text-center">
+              <h2 className="text-2xl font-bold text-gray-800 dark:text-white mb-4">Cargar Inventario</h2>
+              <p className="text-gray-600 dark:text-gray-300 mb-6">Seleccione un archivo CSV para cargar el inventario. El archivo debe contener las columnas: placa, descripcion, crea, cantidad. La aplicación manejará delimitadores de coma o punto y coma, y campos entre comillas.</p>
+              <label htmlFor="csv-upload" className={`w-full cursor-pointer inline-flex items-center justify-center gap-2 py-3 px-6 border border-transparent rounded-md shadow-sm text-base font-medium text-white transition-colors ${isLoading ? 'bg-indigo-400' : 'bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500'}`}>
+                  <UploadIcon className="w-5 h-5" />
+                  {isLoading ? 'Cargando...' : 'Seleccionar Archivo CSV'}
+              </label>
+              <input
+                  id="csv-upload"
+                  type="file"
+                  className="hidden"
+                  accept=".csv, text/csv"
+                  onChange={handleFileChange}
+                  disabled={isLoading}
+              />
+              {error && <p className="mt-4 text-sm text-red-600 dark:text-red-400">{error}</p>}
+          </div>
+        );
+      };
+      
+      // From App.tsx
+      const App = () => {
+        const [items, setItems] = useState([]);
+        const [loans, setLoans] = useState([]);
+        const [isDataLoaded, setIsDataLoaded] = useState(false);
+        const [activeTab, setActiveTab] = useState('form');
+
+        const [requesters, setRequesters] = useState(() => {
+          try {
+              const savedRequesters = localStorage.getItem('loanRequesters');
+              return savedRequesters ? JSON.parse(savedRequesters) : [];
+          } catch (error) {
+              console.error('Failed to load requesters from localStorage', error);
+              return [];
+          }
+        });
+
+        const handleInventoryLoad = (loadedItems) => {
+          setItems(loadedItems);
+          setIsDataLoaded(true);
+        };
+
+        const availableQuantities = useMemo(() => {
+          const quantities = {};
+          items.forEach(item => {
+              const loanedOut = loans
+                  .filter(l => l.item.uniqueKey === item.uniqueKey && l.status === LoanStatus.LOANED)
+                  .reduce((sum, l) => sum + l.loanedQuantity, 0);
+              quantities[item.uniqueKey] = item.initialQuantity - loanedOut;
+          });
+          return quantities;
+        }, [items, loans]);
+
+        const handleBatchLoan = useCallback((
+          loansToCreate,
+          signature,
+          requesterName
+        ) => {
+          const timestamp = new Date();
+          const cleanRequesterName = requesterName.trim();
+          const newLoans = loansToCreate.map(loanData => ({
+            ...loanData,
+            id: crypto.randomUUID(),
+            loanTimestamp: timestamp,
+            receiverSignature: signature,
+            requesterName: cleanRequesterName,
+          }));
+          
+          setLoans(prevLoans => [...newLoans, ...prevLoans]);
+
+          if (cleanRequesterName && !requesters.includes(cleanRequesterName)) {
+              const newRequesters = [...requesters, cleanRequesterName].sort();
+              setRequesters(newRequesters);
+              localStorage.setItem('loanRequesters', JSON.stringify(newRequesters));
+          }
+
+          if (window.innerWidth < 1024) {
+            setActiveTab('history');
+          }
+        }, [requesters]);
+
+        const handleBatchReturn = useCallback((loanIds, returnerSignature) => {
+          const returnTimestamp = new Date();
+          setLoans(prevLoans =>
+            prevLoans.map(loan =>
+              loanIds.includes(loan.id)
+                ? {
+                    ...loan,
+                    status: LoanStatus.RETURNED,
+                    returnTimestamp,
+                    returnerSignature,
+                  }
+                : loan
+            )
+          );
+        }, []);
+        
+        return (
+          <div className="min-h-screen bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100 p-4 sm:p-6 lg:p-8">
+            <div className="max-w-7xl mx-auto">
+              <header className="mb-8 text-center">
+                <h1 className="text-4xl font-extrabold tracking-tight text-gray-900 dark:text-white sm:text-5xl md:text-6xl">
+                  Gestor de Préstamos
+                </h1>
+                <p className="mt-3 max-w-md mx-auto text-base text-gray-500 dark:text-gray-400 sm:text-lg md:mt-5 md:text-xl md:max-w-3xl">
+                  Administre el inventario y registre los préstamos de activos de forma fácil y segura.
+                </p>
+              </header>
+
+              {!isDataLoaded ? (
+                  <InventoryLoader onLoad={handleInventoryLoad} />
+              ) : (
+                <>
+                  <div className="lg:hidden mb-4">
+                    <div className="border-b border-gray-200 dark:border-gray-700">
+                      <nav className="-mb-px flex space-x-2" aria-label="Tabs">
+                        <button
+                          onClick={() => setActiveTab('form')}
+                          className={`w-1/2 py-4 px-1 text-center border-b-2 font-medium text-sm transition-colors ${
+                            activeTab === 'form'
+                              ? 'border-indigo-500 text-indigo-600 dark:text-indigo-400'
+                              : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-200 dark:hover:border-gray-600'
+                          }`}
+                          aria-current={activeTab === 'form' ? 'page' : undefined}
+                        >
+                          Registrar Préstamo
+                        </button>
+                        <button
+                          onClick={() => setActiveTab('history')}
+                          className={`w-1/2 py-4 px-1 text-center border-b-2 font-medium text-sm transition-colors ${
+                            activeTab === 'history'
+                              ? 'border-indigo-500 text-indigo-600 dark:text-indigo-400'
+                              : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-200 dark:hover:border-gray-600'
+                          }`}
+                          aria-current={activeTab === 'history' ? 'page' : undefined}
+                        >
+                          Historial
+                        </button>
+                      </nav>
+                    </div>
+                  </div>
+
+                  <main>
+                    <div className="block lg:hidden">
+                      {activeTab === 'form' && <LoanForm items={items} onBatchLoan={handleBatchLoan} availableQuantities={availableQuantities} requesters={requesters} />}
+                      {activeTab === 'history' && <LoanHistory loans={loans} onBatchReturn={handleBatchReturn} />}
+                    </div>
+                    
+                    <div className="hidden lg:grid grid-cols-1 lg:grid-cols-5 gap-8">
+                      <div className="lg:col-span-2">
+                        <LoanForm items={items} onBatchLoan={handleBatchLoan} availableQuantities={availableQuantities} requesters={requesters} />
+                      </div>
+                      <div className="lg:col-span-3">
+                        <LoanHistory loans={loans} onBatchReturn={handleBatchReturn} />
+                      </div>
+                    </div>
+                  </main>
+                </>
+              )}
+            </div>
+          </div>
+        );
+      };
+
+      // From index.tsx
+      const rootElement = document.getElementById('root');
+      if (!rootElement) {
+        throw new Error("Could not find root element to mount to");
+      }
+      const root = ReactDOM.createRoot(rootElement);
+      root.render(
+        <StrictMode>
+          <App />
+        </StrictMode>
+      );
+    </script>
+<script type="module" src="/index.tsx"></script>
+</body>
+</html>

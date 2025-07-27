@@ -1,0 +1,5 @@
+{
+  "name": "Gestor de Préstamos de Activos",
+  "description": "Una aplicación web para gestionar el préstamo y la devolución de elementos con placa y descripción. Permite cargar inventario, registrar préstamos con firma y llevar un historial de todas las transacciones.",
+  "requestFramePermissions": []
+}
